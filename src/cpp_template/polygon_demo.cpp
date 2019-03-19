@@ -1,5 +1,7 @@
 #include "polygon_demo.hpp"
 #include "opencv2/imgproc.hpp"
+#include "iostream"
+#include "stdlib.h"
 
 using namespace std;
 using namespace cv;
@@ -114,8 +116,39 @@ void PolygonDemo::refreshWindow()
 // return the area of polygon
 int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 {
-    return 0;
+	//XXX : vector 자료 형 => https://blockdmask.tistory.com/70
+	
+	//get vector array length, first point info
+	int pointLength = vtx.size();
+	Point firstPoint = vtx.front();
+
+	int areaSize = 0;
+	
+	// ref : https://darkpgmr.tistory.com/86 - 8
+	for (int point = 1; point < pointLength - 1; point ++) {
+		areaSize += ((vtx[point].x - firstPoint.x) * (vtx[point + 1].y - firstPoint.y) -
+			(vtx[point + 1].x - firstPoint.x) * (vtx[point].y - firstPoint.y)) / 2;
+	}
+
+	// ref : https://darkpgmr.tistory.com/86 - 9
+	//copy calculate vector array
+	/*
+	int checkAreaSize = 0;
+	vector<cv::Point> calculateTarget = vtx;
+	calculateTarget.push_back(vtx.front());
+
+	pointLength = calculateTarget.size();
+	
+	for (int point = 0; point < pointLength - 1; point++) {
+		checkAreaSize += (calculateTarget[point].x + calculateTarget[point + 1].x) *
+			(calculateTarget[point].y - calculateTarget[point + 1].y);
+	}
+	*/
+
+    return abs(areaSize);
 }
+
+
 
 // return true if pt is interior point
 bool PolygonDemo::ptInPolygon(const std::vector<cv::Point>& vtx, Point pt)
@@ -126,6 +159,9 @@ bool PolygonDemo::ptInPolygon(const std::vector<cv::Point>& vtx, Point pt)
 // return homography type: NORMAL, CONCAVE, TWIST, REFLECTION, CONCAVE_REFLECTION
 int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const std::vector<cv::Point>& pts2)
 {
+
+	//TODO : 이 코드의 영역을 구현 -> 구분
+
     if (pts1.size() != 4 || pts2.size() != 4) return -1;
 
     return NORMAL;
