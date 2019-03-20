@@ -131,7 +131,6 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 	}
 
 	// ref : https://darkpgmr.tistory.com/86 - 9
-	
 	/*
 	int checkAreaSize = 0;
 	//copy calculate vector array
@@ -166,6 +165,7 @@ int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const st
 	}
 	// get vector info
 	int vectorSize = pts1.size();
+	//XXX: normalCount는 확인용으로 선언한 변수임.
 	int oppositeCount = 0, normalCount = 0;
 
 	for (int pointNum = 0; pointNum < vectorSize; pointNum++) {
@@ -175,12 +175,10 @@ int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const st
 		Point centerPoint = pts2[pointNum];
 		//check sign cross product value
 		(
-			(centerPoint.x - backPoint.x) * (frontPoint.y - backPoint.y) -
-			(frontPoint.x - backPoint.x) * (centerPoint.y - backPoint.y) > 0 ? normalCount++ : oppositeCount++ 
+			(backPoint.x - centerPoint.x) * (frontPoint.y - centerPoint.y) -
+			(frontPoint.x - centerPoint.x) * (backPoint.y - centerPoint.y) > 0 ? normalCount++ : oppositeCount++
 		);
 	} // for end
-	cout << "normalCount : " + normalCount << "  oppositeCount : " + oppositeCount;
-
 	switch (oppositeCount)
 	{
 	case 0 :
