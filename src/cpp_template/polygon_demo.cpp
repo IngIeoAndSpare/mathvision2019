@@ -131,9 +131,10 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 	}
 
 	// ref : https://darkpgmr.tistory.com/86 - 9
-	//copy calculate vector array
+	
 	/*
 	int checkAreaSize = 0;
+	//copy calculate vector array
 	vector<cv::Point> calculateTarget = vtx;
 	calculateTarget.push_back(vtx.front());
 
@@ -144,7 +145,6 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 			(calculateTarget[point].y - calculateTarget[point + 1].y);
 	}
 	*/
-
     return abs(areaSize);
 }
 
@@ -159,12 +159,45 @@ bool PolygonDemo::ptInPolygon(const std::vector<cv::Point>& vtx, Point pt)
 // return homography type: NORMAL, CONCAVE, TWIST, REFLECTION, CONCAVE_REFLECTION
 int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const std::vector<cv::Point>& pts2)
 {
+	//XXX : pts1 = H에 변환된 네 꼭지점 영상좌표, pts2 = 영상 좌표
 
-	//TODO : 이 코드의 영역을 구현 -> 구분
+	if (pts1.size() != 4 || pts2.size() != 4) {
+		return -1;
+	}
+	// get vector info
+	int vectorSize = pts1.size();
+	int oppositeCount = 0, normalCount = 0;
 
-    if (pts1.size() != 4 || pts2.size() != 4) return -1;
+	for (int pointNum = 0; pointNum < vectorSize; pointNum++) {
+		// get cross product point
+		Point backPoint = pts2[(pointNum < 1 ? vectorSize - 1 : pointNum - 1)];
+		Point frontPoint = pts2[(pointNum == (vectorSize - 1) ? 0 : pointNum + 1)];
+		Point centerPoint = pts2[pointNum];
+		//check sign cross product value
+		(
+			(centerPoint.x - backPoint.x) * (frontPoint.y - backPoint.y) -
+			(frontPoint.x - backPoint.x) * (centerPoint.y - backPoint.y) > 0 ? normalCount++ : oppositeCount++ 
+		);
+	} // for end
+	cout << "normalCount : " + normalCount << "  oppositeCount : " + oppositeCount;
 
-    return NORMAL;
+	switch (oppositeCount)
+	{
+	case 0 :
+		return NORMAL;
+	case 1 :
+		return CONCAVE;
+	case 2:
+		return TWIST;
+	case 3 :
+		return CONCAVE_REFLECTION;
+	case 4 :
+		return REFLECTION;
+	default:
+		break;
+		//Exception
+		//throw ExceptionMessage()....
+	}
 }
 
 // estimate a circle that best approximates the input points and return center and radius of the estimate circle
