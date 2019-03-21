@@ -1,7 +1,21 @@
 const POW_NUM = 2;
+const X = 0,
+      Y = 1,
+      Z = 2;
 
-var originPoint = [],
-    movePoint = [];
+var originPoint = [
+        [-0.5, 0, 2.12132],
+        [0.5, 0, 2.12132],
+        [0.5, -0.707107, 2.828427],
+        [0.5, 0.707107, 2.828427],
+        [1,1,1]
+    ],
+    movePoint = [
+        [1.363005, -0.427103, 2.339082],
+        [1.748084, 0.437983, 2.017688],
+        [2.636461, 0.184843, 2.40071],
+        [0,0,0]
+    ];
 
 var Vector = (x, y, z) => {
     this.x = x;
@@ -17,8 +31,19 @@ var Point = (x, y, z) => {
 
 module.exports = {
     init : function () {
+        let originPointArray = this.getPointArray(originPoint);
+        let movePointArray = this.getPointArray(movePoint);
 
     },
+    getPointArray : function (pointArray) {
+        let pointArray = [];
+        for (let pointItem of pointArray) {
+            pointArray.push(
+                new Point(pointItem[X], pointItem[Y], pointItem[Z])
+            );
+        }
+        return pointArray;
+    }
     
 }
 
