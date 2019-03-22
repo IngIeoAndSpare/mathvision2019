@@ -1,6 +1,5 @@
-const mathModule = require('mathjs');
-
-const POW_NUM = 2;
+const POW_NUM = 2,
+      VECTOR_ITEM_SIZE = 3;
 const X = 0,
       Y = 1,
       Z = 2;
@@ -13,10 +12,10 @@ var originPoint = [
         [1,1,1]
     ],
     movePoint = [
-        [1.363005, -0.427103, 2.339082],
+        [1.363005, -0.42713, 2.339082],
         [1.748084, 0.437983, 2.017688],
         [2.636461, 0.184843, 2.40071],
-        [0,0,0]
+        [1.4981, 0.871, 2.8837]
     ];
 
 function Vector (x, y, z) {
@@ -36,7 +35,7 @@ module.exports = {
         let originPointArray = this.getPointArray(originPoint);
         let movePointArray = this.getPointArray(movePoint);
 
-        // R1, R2를 먼저 값을 구한 후 P4에 적용하여 P4' 가 나오는지 확인.
+        // P1,2,3를 이용해 R1, R2를 값을 구한 후 P4에 적용하여 P4' 가 나오는지 확인.
         // ref : https://sjwd.tistory.com/34
         // get vector
         let oriFrontVector = originPointArray[0].getVector(originPointArray[1]),
@@ -53,7 +52,35 @@ module.exports = {
         let r1CosValue = this.getCosValue(oriNormalVector, moveNormalVector);
         let r1SinValue = this.getSinValue(r1CosValue);
 
+        // get rotation R1
+        let normalVectorForOriMove = oriNormalVector.getCrossProduct(moveNormalVector);
+        let oriUnitVector = normalVectorForOriMove.getUnitVector();
+        let rotation1 = this.getRotationMatrix(r1CosValue, r1SinValue, oriUnitVector);
+
+        // get rotation R2
+        let moveUnitVector = moveNormalVector.getUnitVector();
+        let outInterMetrix = 
+            this.getMatrixMultiplyArray(
+                rotation1,
+                oriBackVector.convertVectorToArray(true)
+            );
+        let outInterVector = this.convertMatrixToVector(outInterMetrix, true);
+        let r2CosValue = this.getCosValue(outInterVector, moveBackVector);
+        let r2SinValue = this.getSinValue(r2CosValue);
+        let rotation2 = this.getRotationMatrix(r2CosValue, r2SinValue, moveUnitVector);
+        this.checkRotation(
+            rotation1,
+            rotation2,
+            originPointArray[3].convertPointToArray(true),
+            originPointArray[0].convertPointToArray(true),
+            movePointArray[0].convertPointToArray(true),
+            movePointArray[3].convertPointToArray(true)
+        )
     },
+    /**
+     * return point object array.
+     * @param {array} sourcePointArray floot value array. must 1 dimension. 
+     */
     getPointArray : function (sourcePointArray) {
         let pointArray = [];
         for (let pointItem of sourcePointArray) {
@@ -72,17 +99,123 @@ module.exports = {
         return (
             sourceVector.getDotProduct(targetVector) /
             sourceVector.getVectorLength() * targetVector.getVectorLength()
-        )
+        );
     },
     /**
      * get sin value
-     * @param {float} cosValue 
+     * @param {float} cosValue cosin Value.
      */
     getSinValue : function (cosValue) {
         return Math.sqrt(1 - Math.pow(cosValue, POW_NUM));
-    }
+    },
+    /**
+     * get rotation matrix.
+     * @param {floot} cosValue cosValue For degree
+     * @param {floot} sinValue sinValue For degree
+     * @param {Vector} uVector unit Vector
+     */
+    getRotationMatrix: function (cosValue, sinValue, uVector) {
+        let xPowValue = Math.pow(uVector.x, POW_NUM),
+            yPowValue = Math.pow(uVector.y, POW_NUM),
+            zPowValue = Math.pow(uVector.z, POW_NUM),
+            subCosValue = 1 - cosValue;
 
-    
+        return [
+            [
+                cosValue + xPowValue * subCosValue,
+                uVector.x * uVector.y * subCosValue - uVector.z * sinValue,
+                uVector.x * uVector.z * subCosValue + uVector.y * sinValue
+            ],
+            [
+                uVector.y * uVector.x * subCosValue + uVector.z * sinValue,
+                cosValue + yPowValue * subCosValue,
+                uVector.y * uVector.z * subCosValue - uVector.x * sinValue
+            ],
+            [
+                uVector.z * uVector.x * subCosValue - uVector.y * sinValue,
+                uVector.z * uVector.y * subCosValue + uVector.x * sinValue,
+                cosValue + zPowValue * subCosValue
+            ]
+        ];
+    },
+    /**
+     * get matrix multiply array. must all colum be same size. 
+     * calculate => sourceMatrix * targetMatrix
+     * return array.
+     * @param {array} sourceMatrix 
+     * @param {array} targetMatrix 
+     */
+    getMatrixMultiplyArray: function(sourceMatrix, targetMatrix) {
+        //XXX: targetMatrixRows는 확인용 변수로 선언됨.
+        let sourceMatrixRows = sourceMatrix.length,
+            sourceMatrixCols = sourceMatrix[0].length,
+            targetMatrixRows = targetMatrix.length,
+            targetMatrixCols = targetMatrix[0].length;
+        
+        let resultArray = new Array(sourceMatrixRows);
+
+        for(let rowNum = 0; rowNum < sourceMatrixRows; ++rowNum) {
+            resultArray[rowNum] = new Array(targetMatrixCols);
+            for(let colNum = 0; colNum < targetMatrixCols; ++colNum) {
+                resultArray[rowNum][colNum] = 0;
+                for(let cellNum = 0; cellNum < sourceMatrixCols; ++cellNum) {
+                    resultArray[rowNum][colNum] +=
+                     sourceMatrix[rowNum][cellNum] * targetMatrix[cellNum][colNum];
+                }// cell for end
+            }// colNum for end
+        } // rowNum for end
+        
+        return resultArray;
+    },
+    /**
+     * convert matrix to vector object. must matrix size be 3
+     * @param {array} sourceMatrix source matrix
+     * @param {boolean} flag input matrix category. true => [[i], [i], [i]] || false => [[i, i, i]]
+     */
+    convertMatrixToVector: function(sourceMatrix, flag) {
+        let convertVector = new Vector();
+        for(let num = 0; num < VECTOR_ITEM_SIZE; num++) {
+            convertVector[String.fromCharCode(num + 120)] = 
+                (flag ? sourceMatrix[num][0] : sourceMatrix[0][num])
+        }
+        return convertVector;
+    },
+    /**
+     * calculate move point use rotation 1, 2. and print result and check anwser point. 
+     * @param {array} rotation1 rotation 1 matrix
+     * @param {array} rotation2 rotation 2 matrix
+     * @param {array} inputPoint target point
+     * @param {array} oriFrontPoint ori front point
+     * @param {array} moveFrontPoint move front point
+     * @param {array} resultPoint anwser point
+     */
+    checkRotation: function (rotation1, rotation2, inputPoint, oriFrontPoint, moveFrontPoint, resultVector) {
+        let rotationMultipleValue = this.getMatrixMultiplyArray(rotation2, rotation1);
+        let sumInputOriFrontPoint = this.calArray(inputPoint, oriFrontPoint, true);
+        console.log(rotationMultipleValue);
+        let calculateValue = this.getMatrixMultiplyArray(
+            rotationMultipleValue,sumInputOriFrontPoint
+        );
+        let result = this.calArray(calculateValue, moveFrontPoint, true);
+        //console.log('====== cal result ======');
+        //console.log(result);
+        //console.log('====== anwser =======');
+        //console.log(resultPoint);
+    },
+    calArray: function (sourceMatrix, targetMatrix, flag) {
+        let rows = sourceMatrix.length;
+        let cols = sourceMatrix[0].length;
+        let resultMatrix = new Array(rows);
+        for(let rowNum = 0; rowNum < rows; rowNum++) {
+            let colsMatrix = new Array(cols);
+            for(let colNum = 0; colNum < cols; colNum++) {
+                colsMatrix[colNum] = sourceMatrix[rowNum][colNum] +
+                 targetMatrix[rowNum][colNum] * (flag ? 1 : -1);
+            }
+            resultMatrix.push(colsMatrix);
+        }
+        return resultMatrix;
+    }
 }
 
 Point.prototype = {
@@ -106,6 +239,16 @@ Point.prototype = {
             Math.pow(targetPoint.x - this.x, POW_NUM) +
             Math.pow(targetPoint.y - this.y, POW_NUM) +
             Math.pow(targetPoint.z - this.z, POW_NUM)
+        );
+    },
+    /**
+     * convert point to matrix
+     * @param {boolean} flag  true : return column metrix  // false : return row metrix
+     */
+    convertPointToArray : function (flag) {
+        return (
+            flag ? [[this.x], [this.y], [this.z]] : 
+                   [[this.x, this.y, this.z]]
         );
     }
 }
@@ -132,25 +275,33 @@ Vector.prototype = {
     },
     /**
      * get Dot product value. thisVector * targetVector
-     * @param {Vector} targetVector 
+     * @param {Vector} targetVector target product vector
      */
     getDotProduct : function (targetVector) {
         return (this.x * targetVector.x) + (this.y * targetVector.y) + (this.z * targetVector.z); 
     },
     /**
-     * print vector x, y, z info
+     * get unit vector. 
      */
-    printVectorInfo : function () {
-        console.log("x => " + this.x + "   y => " + this.y + "    z => " + this.z);
+    getUnitVector : function () {
+        let vectorLength = this.getVectorLength();
+        return new Vector(this.x / vectorLength, this.y / vectorLength, this.z /vectorLength);
     },
     /**
-     * convert vector to metrix
-     * @param {Flag} flag  true : return column metrix  // false : return row metrix
+     * print vector x, y, z info
+     * @param {string} name print for vector name.
+     */
+    printVectorInfo : function (name) {
+        console.log(name + ":   x => " + this.x + "   y => " + this.y + "    z => " + this.z);
+    },
+    /**
+     * convert vector to matrix
+     * @param {boolean} flag  true : return column metrix  // false : return row metrix
      */
     convertVectorToArray : function (flag) {
         return (
-            flag ? [this.x, this.y, this.z] : 
-                    [[this.x, this.y, this.z]]
+            flag ? [[this.x], [this.y], [this.z]] : 
+                   [[this.x, this.y, this.z]]
         );
     }
 }
