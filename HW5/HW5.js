@@ -56,25 +56,45 @@ module.exports = {
         let normalVectorForOriMove = oriNormalVector.getCrossProduct(moveNormalVector);
         let oriUnitVector = normalVectorForOriMove.getUnitVector();
         let rotation1 = this.getRotationMatrix(r1CosValue, r1SinValue, oriUnitVector);
+        
+        // check R1
+        console.log('======= check R1 =======');
+        moveNormalVector.printVectorInfo('moveNormal');
+        let checkNormal = this.getMatrixMultiplyArray(
+            rotation1, oriNormalVector.convertVectorToArray(true)
+        );
+        console.log(checkNormal);
+        
 
         // get rotation R2
         let moveUnitVector = moveNormalVector.getUnitVector();
-        let outInterMetrix = 
-            this.getMatrixMultiplyArray(
+        let outInterMetrix = this.getMatrixMultiplyArray(
                 rotation1,
                 oriBackVector.convertVectorToArray(true)
-            );
+        );
         let outInterVector = this.convertMatrixToVector(outInterMetrix, true);
         let r2CosValue = this.getCosValue(outInterVector, moveBackVector);
         let r2SinValue = this.getSinValue(r2CosValue);
         let rotation2 = this.getRotationMatrix(r2CosValue, r2SinValue, moveUnitVector);
+        
+        //check R2
+        console.log('======= check R2 =======');
+        moveBackVector.printVectorInfo('moveBackVector');
+        let checkOutMetrix = outInterVector.convertVectorToArray(true);
+        let checkR2 = this.getMatrixMultiplyArray(
+            rotation2, checkOutMetrix
+        );
+        console.log(checkR2);
+
+        // check rotation 1, 2
         this.checkRotation(
             rotation1,
             rotation2,
-            originPointArray[3].convertPointToArray(true),
+            originPointArray[4].convertPointToArray(true),
             originPointArray[0].convertPointToArray(true),
             movePointArray[0].convertPointToArray(true),
-            movePointArray[3].convertPointToArray(true)
+            movePointArray[2].convertPointToArray(true),
+            false
         )
     },
     /**
@@ -189,25 +209,33 @@ module.exports = {
      * @param {array} moveFrontPoint move front point
      * @param {array} resultPoint anwser point
      */
-    checkRotation: function (rotation1, rotation2, inputPoint, oriFrontPoint, moveFrontPoint, resultVector) {
+    checkRotation: function (rotation1, rotation2, inputPoint, oriFrontPoint, moveFrontPoint, resultPoint, flag) {
         let rotationMultipleValue = this.getMatrixMultiplyArray(rotation2, rotation1);
-        let sumInputOriFrontPoint = this.calArray(inputPoint, oriFrontPoint, true);
-        console.log(rotationMultipleValue);
+        let decInputOriFrontPoint = this.calArray(inputPoint, oriFrontPoint, false);
+
         let calculateValue = this.getMatrixMultiplyArray(
-            rotationMultipleValue,sumInputOriFrontPoint
+            rotationMultipleValue, decInputOriFrontPoint
         );
         let result = this.calArray(calculateValue, moveFrontPoint, true);
-        //console.log('====== cal result ======');
-        //console.log(result);
-        //console.log('====== anwser =======');
-        //console.log(resultPoint);
+        console.log('====== cal result ======');
+        console.log(result);
+        if(flag) {
+            console.log('====== anwser =======');
+            console.log(resultPoint);
+        }
     },
+    /**
+     * array calcaulte sum or subtract.
+     * @param {array} sourceMatrix 
+     * @param {array} targetMatrix 
+     * @param {boolean} flag true - sum || false - subtract
+     */
     calArray: function (sourceMatrix, targetMatrix, flag) {
         let rows = sourceMatrix.length;
         let cols = sourceMatrix[0].length;
-        let resultMatrix = new Array(rows);
+        let resultMatrix = [];
         for(let rowNum = 0; rowNum < rows; rowNum++) {
-            let colsMatrix = new Array(cols);
+            let colsMatrix = [];
             for(let colNum = 0; colNum < cols; colNum++) {
                 colsMatrix[colNum] = sourceMatrix[rowNum][colNum] +
                  targetMatrix[rowNum][colNum] * (flag ? 1 : -1);
