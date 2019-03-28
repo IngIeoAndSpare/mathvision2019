@@ -108,6 +108,17 @@ void PolygonDemo::refreshWindow()
                 circle(frame, center, 2, Scalar(0, 255, 0), CV_FILLED);
             }
         }
+		// fit ellpse
+		if (m_param.fit_ellipse) {
+			Point2d centerPoint, axesPoint;
+			float theta;
+			bool ellipseResult = fitEllipse(m_data_pts, centerPoint, axesPoint, theta);
+			if (ellipseResult) {
+				Size ellipseSize = Size(axesPoint.x, axesPoint.y);
+				Scalar ellipseColor = Scalar(0, 255, 204);
+				ellipse(frame, centerPoint, ellipseSize, theta, 0, 360, ellipseColor, 2);
+			}
+		}
     }
 
     imshow("PolygonDemo", frame);
@@ -130,6 +141,8 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 			(vtx[point + 1].x - firstPoint.x) * (vtx[point].y - firstPoint.y)) / 2;
 	}
 
+
+	
 	// ref : https://darkpgmr.tistory.com/86 - 9
 	/*
 	int checkAreaSize = 0;
@@ -144,6 +157,14 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 			(calculateTarget[point].y - calculateTarget[point + 1].y);
 	}
 	*/
+	/*
+	cout << "\npoint : " << pointLength;
+	cout << "\nfirst point : " << firstPoint.x << "  y :" << firstPoint.y;
+	cout << "\nthred Point : " << vtx[2].x << "   y: " << vtx[2].y;
+	cout << "\nget space : " << abs((firstPoint.x - vtx[2].x) * (firstPoint.y - vtx[2].y));
+	cout << "\nget space / 2 : " << abs((firstPoint.x - vtx[2].x) * (firstPoint.y - vtx[2].y)) / 2;
+	cout << "\n twist space : " << abs((abs(firstPoint.x) - abs(vtx[3].x)) * (abs(firstPoint.y) - abs(vtx[3].y))) / 2;
+	*/
     return abs(areaSize);
 }
 
@@ -152,7 +173,7 @@ int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 // return true if pt is interior point
 bool PolygonDemo::ptInPolygon(const std::vector<cv::Point>& vtx, Point pt)
 {
-    return false;
+    return true;
 }
 
 // return homography type: NORMAL, CONCAVE, TWIST, REFLECTION, CONCAVE_REFLECTION
@@ -201,11 +222,104 @@ int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const st
 // estimate a circle that best approximates the input points and return center and radius of the estimate circle
 bool PolygonDemo::fitCircle(const std::vector<cv::Point>& pts, cv::Point2d& center, double& radius)
 {
-    int n = (int)pts.size();
-    if (n < 3) return false;
+    int pointSize = (int)pts.size();
+	if (pointSize < 3) {
+		return false;
+	}
 
-    return false;
+	// ref : https://stackoverflow.com/questions/19083775/convert-vector-of-points-to-mat-opencv 
+	// ref : http://younanote.blogspot.com/2015/08/opencv-mat.html
+	// set matrix. CV_32FC1 => floot, CV_64FC3 => double
+	//Mat pointMat = Mat(pts, false);
+	Mat resultMat = Mat(pointSize, 1, CV_32FC1);
+	Mat pointMat = Mat(pointSize, 3, CV_32FC1);
+	for (int pointNum = 0; pointNum < pointSize; pointNum++) {
+		pointMat.at<float>(pointNum, 0) = pts[pointNum].x;
+		pointMat.at<float>(pointNum, 1) = pts[pointNum].y;
+		pointMat.at<float>(pointNum, 2) = 1;
+		resultMat.at<float>(pointNum, 0) = -(pow(pts[pointNum].x, 2) + pow(pts[pointNum].y, 2));
+	}
+	
+	// ref : http://answers.opencv.org/question/94555/mat-transpose-t-a-nx2-mat-gives-me-a-1x2n-output/
+	// ref : http://blog.naver.com/PostView.nhn?blogId=windowsub0406&logNo=220515761001
+	// get transpose matrix
+	Mat transPointMat = pointMat.t();
+	// (A^t * A)^-1
+	Mat multiTransAndOri = transPointMat * pointMat;
+	Mat pseudoInvMat = multiTransAndOri.inv() * transPointMat;
+	// result a, b, c
+	Mat result = pseudoInvMat * resultMat;
+	
+	center.x = - (result.at<float>(0, 0)) / 2;
+	center.y = - (result.at<float>(1, 0)) / 2;
+	radius =  sqrt(pow(result.at<float>(0, 0), 2) + pow(result.at<float>(1, 0), 2) - result.at<float>(2, 0) * 4) / 2;
+
+	// check
+	cout << "====== PointMat X {a, b, c} =====\n";
+	cout << pointMat * result;
+	cout << "\n====== result Mat =====\n";
+	cout << resultMat;
+
+    return true;
 }
+
+bool PolygonDemo::fitEllipse(const std::vector<cv::Point>& pts, cv::Point2d& centerPoint, cv::Point2d& axesPoint, float& theta) {
+	int pointSize = (int)pts.size();
+	const int ARRAY_SIZE = 6;
+
+	if (pointSize <= 5) {
+		return false;
+	}
+	// axesPoint, centerPoint, theta 값을 구하고 return;
+
+	Mat pointMat = Mat(pointSize, ARRAY_SIZE, CV_32FC1);
+	Mat resultMat = Mat(pointSize, 1, CV_32FC1);
+
+	// T => transposed.
+	Mat svdResultSingular, svdResultLeftSingular, svdResultRightSingularT;
+	// set point mat ref : 컴퓨터비전 ch3 p.13
+	for (int pointNum = 0; pointNum < pointSize; pointNum++) {
+		pointMat.at<float>(pointNum, 0) = pow(pts[pointNum].x, 2);
+		pointMat.at<float>(pointNum, 1) = pts[pointNum].x * pts[pointNum].y;
+		pointMat.at<float>(pointNum, 2) = pow(pts[pointNum].y, 2);
+		pointMat.at<float>(pointNum, 3) = pts[pointNum].x;
+		pointMat.at<float>(pointNum, 4) = pts[pointNum].y;
+		pointMat.at<float>(pointNum, 5) = 1;
+	}
+	// ref : https://docs.opencv.org/3.4.2/df/df7/classcv_1_1SVD.html 중 compute();
+	// ref : https://docs.opencv.org/3.4.2/df/df7/classcv_1_1SVD.html#a4700f5207e66cdd9924bf64e34911832 flag
+	SVD::compute(pointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
+	Mat convertSvdResultRMat = svdResultRightSingularT.t();
+
+	float resultArray[ARRAY_SIZE] = {};
+	for (int pointNum = 0; pointNum < ARRAY_SIZE; pointNum++) {
+		//XXX: 확인용 mat
+		resultMat.at<float>(pointNum, 0) = convertSvdResultRMat.at<float>(pointNum, ARRAY_SIZE - 1);
+		//실제 계산 a~f -> 0 ~ 5
+		resultArray[pointNum] = convertSvdResultRMat.at<float>(pointNum, ARRAY_SIZE - 1);
+	}
+
+	theta = atan(resultArray[1] / (resultArray[0] - resultArray[2])) / 2;
+
+	double centerPointDenominator = pow(resultArray[1], 2) - 4 * resultArray[0] * resultArray[2];
+	centerPoint.x = (2 * resultArray[2] * resultArray[3] - resultArray[1] * resultArray[4]) / centerPointDenominator;
+	centerPoint.y = (2 * resultArray[0] * resultArray[4] - resultArray[1] * resultArray[3]) / centerPointDenominator;
+
+	float axesPointmolecule = resultArray[0] * pow(centerPoint.x, 2) + resultArray[1] * centerPoint.x * centerPoint.y + resultArray[2] * pow(centerPoint.y, 2) - resultArray[5];
+	float cosValue = cos(theta);
+	float sinValue = sin(theta);
+	float cosPow = pow(cosValue, 2);
+	float sinPow = pow(sinValue, 2);
+	axesPoint.x = sqrt(axesPointmolecule / (resultArray[0] * cosPow + resultArray[1] * cosValue * sinValue + resultArray[2] * sinPow));
+	axesPoint.y = sqrt(axesPointmolecule / (resultArray[0] * sinPow - resultArray[1] * cosValue * sinValue + resultArray[2] * cosPow));
+
+	theta = theta * 180 / 3.141592;
+
+	//cout << pointMat * resultMat;
+
+	return true;
+}
+
 
 void PolygonDemo::drawPolygon(Mat& frame, const std::vector<cv::Point>& vtx, bool closed)
 {
