@@ -119,6 +119,25 @@ void PolygonDemo::refreshWindow()
 				ellipse(frame, centerPoint, ellipseSize, theta, 0, 360, ellipseColor, 2);
 			}
 		}
+
+		// draw line use Straight
+		if (m_param.draw_Straight) {
+			Point2d stPoint, edPoint;
+			bool drawOk = drawLineStraight(m_data_pts, stPoint, edPoint, frame.cols);
+			if (drawOk) {
+				line(frame, stPoint, edPoint, Scalar(255, 0, 0), 1);
+				if (m_param.draw_SVD_line) {
+					drawLineSVD(m_data_pts, stPoint, edPoint, frame.cols);
+					line(frame, stPoint, edPoint, Scalar(0, 255, 255), 1);
+				}
+			}
+		} else if (m_param.draw_SVD_line) {
+			Point2d stPoint, edPoint;
+			bool drawOk = drawLineSVD(m_data_pts, stPoint, edPoint, frame.cols);
+			if (drawOk) {
+				line(frame, stPoint, edPoint, Scalar(0, 255, 255), 1);
+			}
+		}
     }
 
     imshow("PolygonDemo", frame);
@@ -271,7 +290,7 @@ bool PolygonDemo::fitEllipse(const std::vector<cv::Point>& pts, cv::Point2d& cen
 		return false;
 	}
 	// axesPoint, centerPoint, theta 값을 구하고 return;
-
+	
 	Mat pointMat = Mat(pointSize, ARRAY_SIZE, CV_32FC1);
 	Mat resultMat = Mat(pointSize, 1, CV_32FC1);
 
@@ -288,6 +307,7 @@ bool PolygonDemo::fitEllipse(const std::vector<cv::Point>& pts, cv::Point2d& cen
 	}
 	// ref : https://docs.opencv.org/3.4.2/df/df7/classcv_1_1SVD.html 중 compute();
 	// ref : https://docs.opencv.org/3.4.2/df/df7/classcv_1_1SVD.html#a4700f5207e66cdd9924bf64e34911832 flag
+	SVD::compute(pointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
 	SVD::compute(pointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
 	Mat convertSvdResultRMat = svdResultRightSingularT.t();
 
@@ -319,6 +339,72 @@ bool PolygonDemo::fitEllipse(const std::vector<cv::Point>& pts, cv::Point2d& cen
 
 	return true;
 }
+
+bool PolygonDemo::drawLineStraight(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize)
+{
+	int pointCount = pts.size();
+	if (pointCount < 2) {
+		return false;
+	}
+	Mat pointMat = Mat(pointCount, 2, CV_32FC1);
+	Mat resultMat = Mat(pointCount, 1, CV_32FC1);
+	Mat constantMat = Mat(2, 1, CV_32FC1);
+	Mat svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, pointMatInv;
+
+	// ref : 8주차 수업자료
+	for (int pointNum = 0; pointNum < pointCount; pointNum++) {
+		pointMat.at<float>(pointNum, 0) = pts[pointNum].x;
+		pointMat.at<float>(pointNum, 1) = 1;
+		resultMat.at<float>(pointNum, 0) = pts[pointNum].y;
+	}
+	SVD::compute(pointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
+	// ref: https://docs.opencv.org/3.4.0/d2/de8/group__core__array.html#ggaaf9ea5dcc392d5ae04eacb9920b9674ca523b676c90c7a1d2841b1267ba9ba614
+	pointMatInv = pointMat.inv(1);
+	constantMat = pointMatInv * resultMat;
+
+	stPoint.x = 0;
+	edPoint.x = colSize;
+	stPoint.y = constantMat.at<float>(0, 0)*stPoint.x + constantMat.at<float>(1, 0);
+	edPoint.y = constantMat.at<float>(0, 0)*edPoint.x + constantMat.at<float>(1, 0);
+	return true;
+
+}
+
+bool PolygonDemo::drawLineSVD(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize) {
+	
+	int pointCount = pts.size();
+	if (pointCount < 2) {
+		return false;
+	}
+
+	Mat pointMat = Mat(pointCount, 3, CV_32FC1);
+	Mat resultMat = Mat(pointCount, 1, CV_32FC1);
+	Mat constantMat = Mat(3, 1, CV_32FC1);
+	Mat svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, svdRMat;
+
+	// ref : 8주차 수업자료
+	for (int pointNum = 0; pointNum < pointCount; pointNum++) {
+		pointMat.at<float>(pointNum, 0) = pts[pointNum].x;
+		pointMat.at<float>(pointNum, 1) = pts[pointNum].y;
+		pointMat.at<float>(pointNum, 2) = 1;
+		resultMat.at<float>(pointNum, 0) = 0;
+	}
+	SVD::compute(pointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
+	svdRMat = svdResultRightSingularT.t();
+	int svdRmatLastColNum = svdRMat.cols - 1;
+	// get left colum
+	for (int rowNum = 0; rowNum < svdRMat.rows; rowNum++) {
+		constantMat.at<float>(rowNum, 0) = svdRMat.at<float>(rowNum, svdRmatLastColNum);
+	}
+	// y = -1/b(ax+c)
+	stPoint.x = 0;
+	edPoint.x = colSize;
+	stPoint.y = ((constantMat.at<float>(0, 0)*stPoint.x + constantMat.at<float>(2, 0)) / constantMat.at<float>(1, 0))* -1;
+	edPoint.y = ((constantMat.at<float>(0, 0)*edPoint.x + constantMat.at<float>(2, 0)) / constantMat.at<float>(1, 0)) * -1;
+	return true;
+}
+
+
 
 
 void PolygonDemo::drawPolygon(Mat& frame, const std::vector<cv::Point>& vtx, bool closed)

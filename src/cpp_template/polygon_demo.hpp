@@ -12,16 +12,20 @@ struct PolygonDemoParam
     bool fit_line;
     bool fit_circle;
     bool fit_ellipse;
+	bool draw_Straight;
+	bool draw_SVD_line;
 
     PolygonDemoParam()
     {
-        compute_area = true;
+        compute_area = false;
         draw_line = true;
         check_ptInPoly = true;
         check_homography = false;
         fit_line = false;
 		fit_circle = false;
-        fit_ellipse = true;
+        fit_ellipse = false;
+		draw_Straight = true;
+		draw_SVD_line = true;
     }
 };
 
@@ -34,7 +38,6 @@ public:
     void refreshWindow();
     void handleMouseEvent(int evt, int x, int y, int flags);
     void drawPolygon(cv::Mat& frame, const std::vector<cv::Point>& vtx, bool closed);
-
     void setParam(const PolygonDemoParam& param) { m_param = param; }
     PolygonDemoParam getParam() { return m_param; }
 
@@ -46,6 +49,9 @@ public:
     bool fitLine(const std::vector<cv::Point>& pts, cv::Point2d& center, double& radius);
     bool fitCircle(const std::vector<cv::Point>& pts, cv::Point2d& center, double& radius);
 	bool fitEllipse(const std::vector<cv::Point>& pts, cv::Point2d& centerPoint, cv::Point2d& axesPoint, float& theta);
+
+	bool drawLineStraight(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize);
+	bool drawLineSVD(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize);
 
 protected:
     bool m_data_ready;
