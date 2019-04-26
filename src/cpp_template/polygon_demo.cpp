@@ -125,17 +125,23 @@ void PolygonDemo::refreshWindow()
 			Point2d stPoint, edPoint;
 			bool drawOk = drawLineStraight(m_data_pts, stPoint, edPoint, frame.cols);
 			if (drawOk) {
-				line(frame, stPoint, edPoint, Scalar(255, 0, 0), 1);
+				line(frame, stPoint, edPoint, Scalar(0, 255, 0), 1);
+				string type_str = "y=ax+b";
+				putText(frame, type_str, Point(15, 35), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 255, 0), 1);
 				if (m_param.draw_SVD_line) {
 					drawLineSVD(m_data_pts, stPoint, edPoint, frame.cols);
-					line(frame, stPoint, edPoint, Scalar(0, 255, 255), 1);
+					type_str = "ax+by+c = 0";
+					putText(frame, type_str, Point(15, 75), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 1);
+					line(frame, stPoint, edPoint, Scalar(0, 0, 255), 1);
 				}
 			}
 		} else if (m_param.draw_SVD_line) {
 			Point2d stPoint, edPoint;
 			bool drawOk = drawLineSVD(m_data_pts, stPoint, edPoint, frame.cols);
 			if (drawOk) {
-				line(frame, stPoint, edPoint, Scalar(0, 255, 255), 1);
+				string type_str = "ax+by+c = 0";
+				putText(frame, type_str, Point(15, 125), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 1);
+				line(frame, stPoint, edPoint, Scalar(0, 0, 255), 1);
 			}
 		}
     }
