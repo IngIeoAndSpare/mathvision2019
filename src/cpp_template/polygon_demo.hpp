@@ -14,18 +14,20 @@ struct PolygonDemoParam
     bool fit_ellipse;
 	bool draw_Straight;
 	bool draw_SVD_line;
+	bool draw_cauch_line;
 
     PolygonDemoParam()
     {
         compute_area = false;
-        draw_line = true;
-        check_ptInPoly = true;
+        draw_line = false;
+        check_ptInPoly = false;
         check_homography = false;
         fit_line = false;
 		fit_circle = false;
         fit_ellipse = false;
-		draw_Straight = true;
-		draw_SVD_line = true;
+		draw_Straight = false;
+		draw_SVD_line = false;
+		draw_cauch_line = true;
     }
 };
 
@@ -52,6 +54,8 @@ public:
 
 	bool drawLineStraight(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize);
 	bool drawLineSVD(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize);
+
+	bool drawLineCauchy(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize, bool flag, cv::Mat& residualMat);
 
 protected:
     bool m_data_ready;

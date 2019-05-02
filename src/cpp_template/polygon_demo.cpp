@@ -144,6 +144,35 @@ void PolygonDemo::refreshWindow()
 				line(frame, stPoint, edPoint, Scalar(0, 0, 255), 1);
 			}
 		}
+		else if (m_param.draw_cauch_line) {
+			Point2d stPoint, edPoint;
+			Mat residualMat = Mat(m_data_pts.size(), 1, CV_32FC1, float(0));
+			int offset = 0, loopCount = 5;
+			string type_str = "y=ax+b";
+			putText(frame, type_str, Point(15, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(255, 0, 0), 1);
+			// draw Straight line
+			bool drawOk = drawLineStraight(m_data_pts, stPoint, edPoint, frame.cols);
+			if (drawOk) {
+				line(frame, stPoint, edPoint, Scalar(255, 0, 0), 2);
+			}
+			// draw cauch line
+			type_str = "Robust LS: y =ax + b";
+			putText(frame, type_str, Point(15, 55), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 255, 0), 1);
+			for (int workNum = 0; workNum < loopCount; workNum++) {
+				offset++;
+				drawOk = drawLineCauchy(m_data_pts, stPoint, edPoint, frame.cols, true, residualMat);
+				if (drawOk) {
+					residualMat = abs(residualMat);
+					line(
+						frame,
+						stPoint,
+						edPoint,
+						(offset != loopCount ? Scalar( 0, 0, 255) : Scalar(0, 255, 0)),
+						(offset != loopCount ? 1 : 2)
+					);
+				}
+			}// for end
+		}
     }
 
     imshow("PolygonDemo", frame);
@@ -410,7 +439,47 @@ bool PolygonDemo::drawLineSVD(const std::vector<cv::Point>& pts, cv::Point2d& st
 	return true;
 }
 
+bool PolygonDemo::drawLineCauchy(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize, bool flag, cv::Mat& residualMat) {
+	int pointCount = pts.size();
+	if (pointCount < 2) {
+		return false;
+	}
 
+	Mat pointMat = Mat(pointCount, 2, CV_32FC1);
+	Mat resultMat = Mat(pointCount, 1, CV_32FC1);
+	Mat paramMat = Mat(2, 1, CV_32FC1);
+	Mat weightMat = Mat(pointCount, pointCount, CV_32FC1, float(0));
+	Mat pointMatInv;
+	for (int pointNum = 0; pointNum < pointCount; pointNum++) {
+		pointMat.at<float>(pointNum, 0) = pts[pointNum].x;
+		pointMat.at<float>(pointNum, 1) = 1;
+		resultMat.at<float>(pointNum, 0) = pts[pointNum].y;
+		if (flag) {
+			// get cauchy weight. 
+			weightMat.at<float>(pointNum, pointNum) = 1 / (residualMat.at<float>(pointNum, 0) / 1.3998 + 1);
+		}
+	}
+
+	pointMatInv = pointMat.inv(1);
+
+	if (flag) {
+		// robust parameter estimation (참고 : 수업자료 38 ~ 39p)
+		paramMat = (pointMat.t() * weightMat * pointMat).inv(1) * pointMat.t() * weightMat * resultMat;
+		cout << residualMat << endl;
+	}
+	else {
+		paramMat = pointMatInv * resultMat;
+	}
+
+	residualMat = pointMat * paramMat - resultMat;
+
+	stPoint.x = 0;
+	edPoint.x = colSize;
+	stPoint.y = paramMat.at<float>(0, 0) * stPoint.x + paramMat.at<float>(1, 0);
+	edPoint.y = paramMat.at<float>(0, 0) * edPoint.x + paramMat.at<float>(1, 0);
+
+	return true;
+}
 
 
 void PolygonDemo::drawPolygon(Mat& frame, const std::vector<cv::Point>& vtx, bool closed)
