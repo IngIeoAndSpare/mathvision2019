@@ -15,6 +15,7 @@ struct PolygonDemoParam
 	bool draw_Straight;
 	bool draw_SVD_line;
 	bool draw_cauch_line;
+	bool draw_ransac_line;
 
     PolygonDemoParam()
     {
@@ -27,7 +28,8 @@ struct PolygonDemoParam
         fit_ellipse = false;
 		draw_Straight = false;
 		draw_SVD_line = false;
-		draw_cauch_line = true;
+		draw_cauch_line = false;
+		draw_ransac_line = true;
     }
 };
 
@@ -56,6 +58,10 @@ public:
 	bool drawLineSVD(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize);
 
 	bool drawLineCauchy(const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint, int colSize, bool flag, cv::Mat& residualMat);
+	bool drawLineRansac(
+		const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint,
+		int colSize, float threadHoldNum, int& thUnderCount, int iterationNum,
+		cv::Mat& bestConstantMat, cv::Mat& inilerMat);
 
 protected:
     bool m_data_ready;

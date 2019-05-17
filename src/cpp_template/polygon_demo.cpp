@@ -147,7 +147,7 @@ void PolygonDemo::refreshWindow()
 		else if (m_param.draw_cauch_line) {
 			Point2d stPoint, edPoint;
 			Mat residualMat = Mat(m_data_pts.size(), 1, CV_32FC1, float(0));
-			int offset = 0, loopCount = 5;
+			int offset = 0, loopCount = 10;
 			string type_str = "y=ax+b";
 			putText(frame, type_str, Point(15, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(255, 0, 0), 1);
 			// draw Straight line
@@ -172,6 +172,30 @@ void PolygonDemo::refreshWindow()
 					);
 				}
 			}// for end
+		}
+		else if (m_param.draw_ransac_line) {
+			Point2d stPoint, edPoint;
+			float threadHoldNum = 300;
+			int thUnderCountMax = 0;
+			Mat bestConstantMat, inilerMat;
+			//ref : https://en.wikipedia.org/wiki/Random_sample_consensus parameters
+			//w값 정의는 어떻게 내리면 효과적?
+			int iterationNum = round(
+				(log(1 - 0.99) / log(1 - pow(0.6, 2))) + (sqrt(1 - pow(0.6, 2)) / pow(0.6, 2))
+			);
+			// bool inlierCheck[m_data_pts.size()] 이게 왜 안먹히지???
+			drawLineRansac(m_data_pts, stPoint, edPoint, frame.cols, threadHoldNum, thUnderCountMax, iterationNum, bestConstantMat, inilerMat);
+
+			line(frame, stPoint, edPoint, Scalar(0, 255, 0), 2);
+			string type_str = "ax+by+c = 0";
+			putText(frame, type_str, Point(15, 35), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 255, 0), 1);
+
+			for (int itemCount = 0; itemCount < m_data_pts.size(); itemCount++) {
+				(
+					inilerMat.at<float>(itemCount, 0) == 1 ?
+					circle(frame, m_data_pts[itemCount], 5, Scalar(0, 255, 255), CV_FILLED) : ""
+				);
+			}
 		}
     }
 
@@ -465,18 +489,108 @@ bool PolygonDemo::drawLineCauchy(const std::vector<cv::Point>& pts, cv::Point2d&
 	if (flag) {
 		// robust parameter estimation (참고 : 수업자료 38 ~ 39p)
 		paramMat = (pointMat.t() * weightMat * pointMat).inv(1) * pointMat.t() * weightMat * resultMat;
-		cout << residualMat << endl;
 	}
 	else {
 		paramMat = pointMatInv * resultMat;
 	}
 
 	residualMat = pointMat * paramMat - resultMat;
-
+	cout << residualMat << endl;
 	stPoint.x = 0;
 	edPoint.x = colSize;
 	stPoint.y = paramMat.at<float>(0, 0) * stPoint.x + paramMat.at<float>(1, 0);
 	edPoint.y = paramMat.at<float>(0, 0) * edPoint.x + paramMat.at<float>(1, 0);
+
+	return true;
+}
+
+bool PolygonDemo::drawLineRansac(
+	const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint,
+	int colSize, float threadHoldNum, int& thUnderCount, int iterationNum,
+	cv::Mat& bestConstantMat, cv::Mat& inilerMat)
+{
+	int pointCount = pts.size();
+	if (pointCount < 2) {
+		return false;
+	}
+
+	Mat pointMat = Mat(pointCount, 3, CV_32FC1);
+
+	for (int itemCount = 0; itemCount < pointCount; itemCount++) {
+		pointMat.at<float>(itemCount, 0) = pts[itemCount].x;
+		pointMat.at<float>(itemCount, 1) = pts[itemCount].y;
+		pointMat.at<float>(itemCount, 2) = 1;
+	}
+
+
+	for (int countIt = 0; countIt < iterationNum; countIt++) {
+		Mat rdPointMat = Mat(2, 3, CV_32FC1);
+		Mat rdConstantMat = Mat(3, 1, CV_32FC1);
+		Mat svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, svdRMat;
+		// get random index
+		int randSelectA = rand() % pointCount;
+		int randSelectB = rand() % pointCount;
+		if (randSelectA == randSelectB) {
+			do {
+				randSelectB = rand() % pointCount;
+			} while (randSelectB == randSelectA);
+		}
+
+		// init random calculate mat
+		for (int count = 0; count < 1; count++) {
+			rdPointMat.at<float>(count, 0) = (count == 0 ? pts[randSelectA].x : pts[randSelectB].x);
+			rdPointMat.at<float>(count, 1) = (count == 0 ? pts[randSelectA].y : pts[randSelectB].y);
+			rdPointMat.at<float>(count, 2) = 1;
+		}
+
+		// calculate svd 
+		SVD::compute(rdPointMat, svdResultSingular, svdResultLeftSingular, svdResultRightSingularT, SVD::FULL_UV);
+		svdRMat = svdResultRightSingularT.t();
+		int svdRmatLastColNum = svdRMat.cols - 1;
+		// get left colum
+		for (int rowNum = 0; rowNum < svdRMat.rows; rowNum++) {
+			rdConstantMat.at<float>(rowNum, 0) = svdRMat.at<float>(rowNum, svdRmatLastColNum);
+		}
+
+		// get residualMat
+		Mat residualMat = Mat(pointCount, 1, CV_32FC1);
+		for (int itemCount = 0; itemCount < pointCount; itemCount++) {
+			residualMat.at<float>(itemCount, 0) =
+			abs(
+						pointMat.at<float>(itemCount,1)
+						- (pointMat.at<float>(itemCount, 0) * rdConstantMat.at<float>(0, 0) + rdConstantMat.at<float>(2, 0)) / rdConstantMat.at<float>(1, 0)
+			);
+		}
+
+		cout << "\n result => " << residualMat;
+
+		// get ransac result
+		int rdThresholdCount = 0;
+		Mat rdInlierMat = Mat::zeros(pointCount, 1, CV_32FC1);
+		cout << "\n============================================\n";
+		cout << "slect a :" << randSelectA << "   slect b : " << randSelectB;
+		for (int checkItemCount = 0; checkItemCount < pointCount; checkItemCount++) {
+			if (residualMat.at<float>(checkItemCount, 0) < threadHoldNum) {
+				cout << "\n" << threadHoldNum << "  end   " << residualMat.at<float>(checkItemCount, 0) << "  item num " << checkItemCount;
+				rdThresholdCount++;
+				rdInlierMat.at<float>(checkItemCount, 0) = 1;
+			}
+		}
+
+		// check threadCount
+		if (rdThresholdCount > thUnderCount) {
+			thUnderCount = rdThresholdCount;
+			bestConstantMat = rdConstantMat;
+			inilerMat = rdInlierMat;
+		}
+
+	} // iteration for end
+
+	cout <<"\n"<< inilerMat;
+	stPoint.x = 0;
+	edPoint.x = colSize;
+	stPoint.y = (bestConstantMat.at<float>(0, 0) * stPoint.x + bestConstantMat.at<float>(2, 0)) * (-1 / bestConstantMat.at<float>(1, 0));
+	edPoint.y = (bestConstantMat.at<float>(0, 0) * edPoint.x + bestConstantMat.at<float>(2, 0)) * (-1 / bestConstantMat.at<float>(1, 0));
 
 	return true;
 }
