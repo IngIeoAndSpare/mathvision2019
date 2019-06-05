@@ -175,7 +175,7 @@ void PolygonDemo::refreshWindow()
 		}
 		else if (m_param.draw_ransac_line) {
 			Point2d stPoint, edPoint;
-			float threadHoldNum = 300;
+			float thresHoldNum = 300;
 			int thUnderCountMax = 0;
 			Mat bestConstantMat, inilerMat;
 			//ref : https://en.wikipedia.org/wiki/Random_sample_consensus parameters
@@ -184,7 +184,7 @@ void PolygonDemo::refreshWindow()
 				(log(1 - 0.99) / log(1 - pow(0.6, 2))) + (sqrt(1 - pow(0.6, 2)) / pow(0.6, 2))
 			);
 			// bool inlierCheck[m_data_pts.size()] 이게 왜 안먹히지???
-			drawLineRansac(m_data_pts, stPoint, edPoint, frame.cols, threadHoldNum, thUnderCountMax, iterationNum, bestConstantMat, inilerMat);
+			drawLineRansac(m_data_pts, stPoint, edPoint, frame.cols, thresHoldNum, thUnderCountMax, iterationNum, bestConstantMat, inilerMat);
 
 			line(frame, stPoint, edPoint, Scalar(0, 255, 0), 2);
 			string type_str = "ax+by+c = 0";
@@ -195,6 +195,42 @@ void PolygonDemo::refreshWindow()
 					inilerMat.at<float>(itemCount, 0) == 1 ?
 					circle(frame, m_data_pts[itemCount], 5, Scalar(0, 255, 255), CV_FILLED) : ""
 				);
+			}
+		}
+
+		if (m_param.draw_gauss_newton_line) {
+			// y = a*sin(bx+c)+d
+			// ref : https://stackoverflow.com/questions/10209935/drawing-sine-wave-using-opencv
+			const int ITEM_COUNT = 4;
+			const int ITORATION = 100;
+			int pointSize = m_data_pts.size();
+			Mat bestConstantMat = Mat(ITEM_COUNT, 1, CV_32FC1);
+
+			int totalValue = 0;
+			float average, standardDeviation = 0;
+			// init constant
+			for (int item = 0; item < pointSize; item++) {
+				totalValue += m_data_pts[item].y;
+			}
+			average = totalValue / pointSize;
+			// meanStdDev() 가 있긴 한데... https://docs.opencv.org/2.4/modules/core/doc/operations_on_arrays.html
+			for (int item = 0; item < pointSize; item++) {
+				standardDeviation += pow(m_data_pts[item].y - average, 2) / (pointSize - 1);
+			}
+			standardDeviation = sqrt(standardDeviation);
+			bestConstantMat.at<float>(0, 0) = standardDeviation;
+			bestConstantMat.at<float>(1, 0) = 1;
+			bestConstantMat.at<float>(2, 0) = 1;
+			bestConstantMat.at<float>(3, 0) = average;
+
+			for (int count = 0; count < ITORATION; count++) {
+				if (drawLineGaussNewton(m_data_pts, bestConstantMat, ITEM_COUNT)) {
+					//TODO : draw graph
+					float test = bestConstantMat.at<float>(0, 0);
+					float test1 = bestConstantMat.at<float>(1, 0);
+					float test2 = bestConstantMat.at<float>(2, 0);
+					float test3 = bestConstantMat.at<float>(3, 0);
+				}
 			}
 		}
     }
@@ -506,7 +542,7 @@ bool PolygonDemo::drawLineCauchy(const std::vector<cv::Point>& pts, cv::Point2d&
 
 bool PolygonDemo::drawLineRansac(
 	const std::vector<cv::Point>& pts, cv::Point2d& stPoint, cv::Point2d& edPoint,
-	int colSize, float threadHoldNum, int& thUnderCount, int iterationNum,
+	int colSize, float thresHoldNum, int& thUnderCount, int iterationNum,
 	cv::Mat& bestConstantMat, cv::Mat& inilerMat)
 {
 	int pointCount = pts.size();
@@ -561,21 +597,20 @@ bool PolygonDemo::drawLineRansac(
 						- (pointMat.at<float>(itemCount, 0) * rdConstantMat.at<float>(0, 0) + rdConstantMat.at<float>(2, 0)) / rdConstantMat.at<float>(1, 0)
 			);
 		}
-
-		cout << "\n result => " << residualMat;
-
+		cout << "\n============================================";
 		// get ransac result
 		int rdThresholdCount = 0;
 		Mat rdInlierMat = Mat::zeros(pointCount, 1, CV_32FC1);
-		cout << "\n============================================\n";
-		cout << "slect a :" << randSelectA << "   slect b : " << randSelectB;
+		
+		cout << "\n select a :" << randSelectA << "   select b : " << randSelectB;
 		for (int checkItemCount = 0; checkItemCount < pointCount; checkItemCount++) {
-			if (residualMat.at<float>(checkItemCount, 0) < threadHoldNum) {
-				cout << "\n" << threadHoldNum << "  end   " << residualMat.at<float>(checkItemCount, 0) << "  item num " << checkItemCount;
+			if (residualMat.at<float>(checkItemCount, 0) < thresHoldNum) {
+				cout << "\n" << thresHoldNum << "  end   " << residualMat.at<float>(checkItemCount, 0) << "  item num " << checkItemCount;
 				rdThresholdCount++;
 				rdInlierMat.at<float>(checkItemCount, 0) = 1;
 			}
 		}
+		cout << "\n all result => \n" << residualMat;
 
 		// check threadCount
 		if (rdThresholdCount > thUnderCount) {
@@ -595,6 +630,35 @@ bool PolygonDemo::drawLineRansac(
 	return true;
 }
 
+bool PolygonDemo::drawLineGaussNewton(const std::vector<cv::Point>& pts, cv::Mat& bestConstantMat, int constantSize)
+{
+	int size = pts.size();
+	// a * sin(bx+c) + d
+
+	Mat residualMat = Mat(size, 1, CV_32FC1),
+		jacobianMat = Mat(size, constantSize, CV_32FC1);
+	
+
+	for (int pointCount = 0; pointCount < size; pointCount++) {
+		float residualValue =
+			bestConstantMat.at<float>(0, 0)
+			* sin(bestConstantMat.at<float>(1, 0) * pts[pointCount].x + bestConstantMat.at<float>(2, 0))
+			+ bestConstantMat.at<float>(3, 0);
+
+		residualMat.at<float>(pointCount, 0) = residualValue;
+
+		// d/da => sin(bx+c)  ||  d/db => ax*cos(bx+c)  || d/dc => a*cos(bx+c)  || d/dd => 1
+		jacobianMat.at<float>(pointCount, 0) = sin(bestConstantMat.at<float>(1, 0) * pts[pointCount].x + bestConstantMat.at<float>(2, 0));
+		jacobianMat.at<float>(pointCount, 1) = bestConstantMat.at<float>(0, 0) * pts[pointCount].x
+					 * cos(bestConstantMat.at<float>(1, 0) * pts[pointCount].x + bestConstantMat.at<float>(2, 0));
+		jacobianMat.at<float>(pointCount, 2) = bestConstantMat.at<float>(0, 0) * cos(bestConstantMat.at<float>(1, 0) * pts[pointCount].x + bestConstantMat.at<float>(2, 0));
+		jacobianMat.at<float>(pointCount, 3) = 1;
+	}
+
+	bestConstantMat = bestConstantMat - (jacobianMat.t() * jacobianMat).inv() * jacobianMat.t() * residualMat;
+
+	return true;
+}
 
 void PolygonDemo::drawPolygon(Mat& frame, const std::vector<cv::Point>& vtx, bool closed)
 {
